@@ -618,19 +618,20 @@ class api {
             $params['fromuser3'] = $userid;
         }
 
-        $cm = get_coursemodule_from_instance('threesixo', $threesixtyid);
+        list($course, $cm) = get_course_and_cm_from_instance($threesixtyid, 'threesixo', 0, $userid);
         $groupmode = groups_get_activity_groupmode($cm);
         if ($groupmode != NOGROUPS) {
-            $usergroups = groups_get_user_groups($cm->course)['0'];
-            if (!empty($usergroups)) {
-                list($sql, $groupparams) = $DB->get_in_or_equal($usergroups, SQL_PARAMS_NAMED);
-                $wheres[] = "u.id IN (
-                            SELECT gm.userid
-                              FROM {groups_members} gm
-                             WHERE gm.groupid $sql
-                        )";
-                $params = array_merge($params, $groupparams);
-            }
+            $currentgroup = groups_get_activity_group($cm, true);
+            $context = $cm->context;
+            $userids = get_enrolled_users($context, '', $currentgroup, 'u.id', null, 0, 0, self::show_only_active_users($context));
+
+            $userids = array_map(
+                function($user) {
+                    return $user->id;
+                }, $userids);
+            list($sql, $params) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+
+            $wheres[] = "u.id $sql";
         }
 
         $whereclause = implode(' AND ', $wheres);
