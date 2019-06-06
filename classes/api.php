@@ -515,8 +515,10 @@ class api {
 
         $groupmode = groups_get_activity_groupmode($cm);
         if ($groupmode != NOGROUPS) {
-
             $currentgroup = groups_get_activity_group($cm, true);
+            if (!$currentgroup && !has_capability('moodle/site:accessallgroups', $context)) {
+                throw new moodle_exception('You don\'t belong in any groups');
+            }
             $userids = get_enrolled_users($context, '', $currentgroup, 'u.id', null, 0, 0, self::show_only_active_users($context));
 
             $userids = array_map(
@@ -579,7 +581,8 @@ class api {
     public static function generate_360_feedback_statuses($threesixtyid, $userid, $includeself = false) {
         global $DB;
 
-        $role = $DB->get_field('threesixo', 'participantrole', ['id' => $threesixtyid]);
+        $threesixo = $DB->get_record('threesixo', ['id' => $threesixtyid], '*', MUST_EXIST);
+        $role = $threesixo->participantrole;
         $wheres = [
             'u.id NOT IN (
                 SELECT fs.touser
@@ -618,7 +621,7 @@ class api {
             $params['fromuser3'] = $userid;
         }
 
-        list($course, $cm) = get_course_and_cm_from_instance($threesixtyid, 'threesixo', 0, $userid);
+        list($course, $cm) = get_course_and_cm_from_instance($threesixtyid, 'threesixo', $threesixo->course, $userid);
         $groupmode = groups_get_activity_groupmode($cm);
         if ($groupmode != NOGROUPS) {
             $currentgroup = groups_get_activity_group($cm, true);
@@ -629,8 +632,8 @@ class api {
                 function($user) {
                     return $user->id;
                 }, $userids);
-            list($sql, $params) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
-
+            list($sql, $inparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+            $params = array_merge($params, $inparams);
             $wheres[] = "u.id $sql";
         }
 
